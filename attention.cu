@@ -90,7 +90,7 @@ void attention_kernel(float *Q, float *K, float *V, float *O, int N, int d) {
     // Step 2: Compute softmax(P) from S
     // For softmax we process each row independetly 
     // which is why the grid size is 1D in this case
-    softmax<<<(N + blockSize.x - 1) / blockSize.x, blockSize.x>>>(d_S, d_P, N);
+    softmax<<<(N + blockSize.x - 1) / blockSize.x, blockSize.x>>>(d_S, d_P, N)>>>;
     cudaDeviceSynchronize();
 
     // Step 3: Compute O = P * V
