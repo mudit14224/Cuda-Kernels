@@ -1,5 +1,6 @@
 #include <iostream>
 #include <cuda_runtime.h>
+#include <cmath>
 
 // compute S function (S => QK^T)
 // Q,K => (Nxd)
@@ -14,7 +15,7 @@ __global__ void compute_S(float *Q, float *K, float *S, int N, int d) {
         // compute S = Q * K^T
         float sum = 0.0f;
         for (int i = 0; i < d; i++) {
-            sum += Q[row * d + i] * K[col * d + i]
+            sum += Q[row * d + i] * K[col * d + i];
         }
         S[row * N + col] = sum;
     }
@@ -24,7 +25,7 @@ __global__ void compute_S(float *Q, float *K, float *S, int N, int d) {
 // S: NxN
 // P: NxN
 __global__ void softmax(float *S, float *P, int N) {
-    int row = blockIdx.x + blockDim.x + threadIdx.x;
+    int row = blockIdx.x * blockDim.x + threadIdx.x;
     if (row < N) {
         float max_val = -INFINITY; 
         // find the max val in order to avoid overflow during softmax
@@ -49,13 +50,13 @@ __global__ void softmax(float *S, float *P, int N) {
 // V: Nxd
 // O: Nxd
 __global__ void compute_O(float *P, float *V, float *O, int N, int d) {
-    row = blockIdx.x + blockDim.x + threadIdx.x; 
-    col = blockIdx.y + blockDim.y + threadIdx.y;
+    int row = blockIdx.x * blockDim.x + threadIdx.x; 
+    int col = blockIdx.y * blockDim.y + threadIdx.y;
 
     if (row < N && col < d) {
         float sum = 0.0f;
         for (int i=0; i<N; i++){
-            sum += P[row * N + i] * V[i * d + col]
+            sum += P[row * N + i] * V[i * d + col];
         }
         O[row * d + col] = sum;
     }
@@ -80,7 +81,7 @@ void attention_kernel(float *Q, float *K, float *V, float *O, int N, int d) {
     cudaMemcpy(d_V, V, N * d * sizeof(float), cudaMemcpyHostToDevice);
 
     // Define block and grid sizes
-    dim3 blockSize(16, 16) // 16x16 threads
+    dim3 blockSize(16, 16); // 16x16 threads
     dim3 gridSize((N + blockSize.x - 1) / blockSize.x, (N + blockSize.y - 1) / blockSize.y);
 
     // Step 1: Compute S = Q * K^T
@@ -90,7 +91,7 @@ void attention_kernel(float *Q, float *K, float *V, float *O, int N, int d) {
     // Step 2: Compute softmax(P) from S
     // For softmax we process each row independetly 
     // which is why the grid size is 1D in this case
-    softmax<<<(N + blockSize.x - 1) / blockSize.x, blockSize.x>>>(d_S, d_P, N)>>>;
+    softmax<<<(N + blockSize.x - 1) / blockSize.x, blockSize.x>>>(d_S, d_P, N);
     cudaDeviceSynchronize();
 
     // Step 3: Compute O = P * V
